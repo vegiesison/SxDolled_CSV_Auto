@@ -1,0 +1,19 @@
+[project]
+name = "sxdolled-csv-auto"
+version = "0.1.0"
+description = "Generate and validate Shopify product CSV files for SxDolled product uploads."
+requires-python = ">=3.11"
+dependencies = []
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project.scripts]
+sxdolled-csv = "sxdolled_csv_auto.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SxDolled CSV Builder</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="styles.css?v=20261006-refresh-sku-details">
+  </head>
+  <body>
+    <div class="app-layout">
+      <nav class="product-nav" aria-label="Product navigation">
+        <div class="product-nav-section">
+          <h2 class="product-nav-heading">Products</h2>
+          <div id="product-nav-buttons" class="product-nav-buttons"></div>
+        </div>
+        <div class="product-nav-section saved-drafts-panel">
+          <h2 class="product-nav-heading">Saved Drafts</h2>
+          <div id="saved-drafts" class="saved-drafts" aria-live="polite"></div>
+        </div>
+      </nav>
+
+      <main class="app-shell">
+        <div class="sticky-controls">
+          <header class="app-header">
+            <div>
+              <h1>SxDolled CSV Builder</h1>
+              <p>Paste each product's source fields, add more product sets as needed, then download one Shopify CSV.</p>
+            </div>
+            <div class="toolbar" aria-label="CSV actions">
+              <button type="button" id="new-workspace">New Workspace</button>
+              <button type="button" id="add-product">+ Add Product</button>
+              <button type="button" id="save-draft">Save Draft</button>
+              <button
+                type="button"
+                id="refresh-sku-details"
+                class="sku-refresh-action"
+                title="Update Title measurements, Product Type, and Variant SKU details from each product's Body (HTML)"
+                aria-label="Refresh product details from Body HTML for all products"
+              >Refresh Product Details</button>
+              <button type="button" id="generate-csv" class="primary-action">Generate CSV</button>
+            </div>
+          </header>
+
+          <div id="status" class="status" role="status" aria-live="polite">1 product set ready.</div>
+        </div>
+        <section id="products" class="product-list" aria-label="Product input sets"></section>
+      </main>
+    </div>
+
+    <template id="product-template">
+      <section class="product">
+        <div class="product-heading">
+          <h2 class="product-title">Product</h2>
+          <button type="button" class="remove-product">Remove</button>
+        </div>
+        <div class="product-grid">
+          <label>
+            Title
+            <textarea class="title-input" data-field="title" spellcheck="false"></textarea>
+          </label>
+          <label>
+            Body (HTML)
+            <textarea data-field="bodyHtml" spellcheck="false"></textarea>
+          </label>
+          <label>
+            Tags
+            <textarea data-field="tags" class="tags-output" spellcheck="false" readonly></textarea>
+          </label>
+        </div>
+        <div class="csv-field-row">
+          <label>
+            Variant SKU
+            <input type="text" data-field="variantSku" spellcheck="false">
+          </label>
+          <label>
+            Variant Price
+            <input type="number" data-field="variantPrice" min="0" step="0.01" inputmode="decimal">
+          </label>
+          <label>
+            Weight (kg)
+            <input type="number" data-field="weightKg" min="0" step="0.1" inputmode="decimal" placeholder="32">
+          </label>
+          <label>
+            Status
+            <select data-field="status">
+              <option value="active" selected>active</option>
+              <option value="draft">draft</option>
+            </select>
+          </label>
+          <fieldset class="market-controls">
+            <legend>Included Markets</legend>
+            <label><input type="checkbox" data-included-market="Included / Australia" checked> Australia</label>
+            <label><input type="checkbox" data-included-market="Included / Canada" checked> Canada</label>
+            <label><input type="checkbox" data-included-market="Included / Europe" checked> Europe</label>
+            <label><input type="checkbox" data-included-market="Included / International" checked> International</label>
+            <label><input type="checkbox" data-included-market="Included / New Zealand" checked> New Zealand</label>
+            <label><input type="checkbox" data-included-market="Included / U.K." checked> U.K.</label>
+            <label><input type="checkbox" data-included-market="Included / U.S." checked> U.S.</label>
+          </fieldset>
+        </div>
+        <div class="tag-builder">
+          <div class="tag-builder-heading">
+            <div>
+              <h3>Tag Options</h3>
+              <p>Use a dropdown value or type a custom value when it is missing from the list.</p>
+            </div>
+            <div class="tag-builder-actions">
+              <button type="button" class="refresh-tags">Refresh Tags</button>
+              <button type="button" class="prefill-tags">Prefill from Body</button>
+            </div>
+          </div>
+          <div class="tag-controls" data-tag-controls></div>
+        </div>
+      </section>
+    </template>
+
+    <script src="csv-generator.js?v=20261006-compact-yeloly-sku"></script>
+    <script src="tag-builder.js?v=20261006-explicit-blank-tags"></script>
+    <script src="draft-store.js?v=20260924-workspaces"></script>
+    <script src="app.js?v=20261006-refresh-tags"></script>
+  </body>
+</html>
