@@ -22,7 +22,7 @@
     if (existing) {
       const updated = {
         ...existing,
-        title: draftTitle(products, drafts.indexOf(existing) + 1),
+        title: clean(existing.customTitle) || draftTitle(products, drafts.indexOf(existing) + 1),
         savedAt,
         products,
       };
@@ -30,7 +30,7 @@
         action: "updated",
         activeDraftId: updated.id,
         draft: updated,
-        drafts: moveToFront(drafts, updated),
+        drafts: drafts.map((draft) => draft.id === updated.id ? updated : draft),
       };
     }
 
@@ -57,7 +57,24 @@
     };
   }
 
-  const api = { draftTitle, upsertDraft };
+  function renameDraft(drafts, id, name) {
+    const customTitle = clean(name);
+    if (!customTitle) throw new Error("Enter a workspace name.");
+    if (customTitle.length > 120) throw new Error("Workspace names must be 120 characters or fewer.");
+    if (!drafts.some((draft) => draft.id === id)) throw new Error("Saved draft was not found.");
+    return drafts.map((draft) => draft.id === id ? { ...draft, title: customTitle, customTitle } : draft);
+  }
+
+  function reorderDrafts(drafts, orderedIds) {
+    const byId = new Map(drafts.map((draft) => [String(draft.id), draft]));
+    const ids = orderedIds.map(String);
+    if (ids.length !== drafts.length || new Set(ids).size !== drafts.length || ids.some((id) => !byId.has(id))) {
+      throw new Error("Draft order changed. Try reordering the saved workspaces again.");
+    }
+    return ids.map((id) => byId.get(id));
+  }
+
+  const api = { draftTitle, upsertDraft, renameDraft, reorderDrafts };
 
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;

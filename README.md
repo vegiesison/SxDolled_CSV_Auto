@@ -54,11 +54,19 @@ Each product set has three required inputs:
 
 - `Title`
 - `Body (HTML)`
+- `Body (HTML)`
+- `Tags`, generated from the tag option controls
 - `Tags`, generated from the tag option controls
 
 Each product also shows `Variant SKU`. It auto-generates from the current title, body, and tag values, but you can edit it before generating the CSV. Manual edits are exported exactly and are not overwritten by later source-field changes.
 
-Each product also has tag option controls with dropdowns and custom inputs. Common values are preselected, while frequently changing values such as height, cup size, brand, LHP, waist, hip, hair, eyes, ethnicity, and extras start blank. The title format is treated as `Doll Name (Cup Size) (Height) | Doll Description | Brand`, so pasting `Title` pre-fills cup size, height, and brand. Exact known-brand matches are accepted immediately; near brand matches are accepted only at 90% confidence or higher. Lower-confidence brand matches stay blank for manual verification.
+Each product also has tag option controls with dropdowns and custom inputs. Common values are preselected, while frequently changing values such as height, cup size, LHP, waist, hip, hair, eyes, ethnicity, and extras start blank. The title format is treated as `Doll Name (Cup Size) (Height) | Doll Description | Brand`, so pasting `Title` pre-fills cup size and height. Brand is read directly from the final title segment and displayed as a read-only field, including brands outside the previous dropdown list.
+
+The workspace toolbar includes `Remove SxD Names`, which removes parenthesized `(SxD ...)` aliases from every product's title, body, and SKU in the open workspace. `Edit Doll Descriptions` accepts one description per product, in product order, previews the mapping, and replaces the middle title description while retaining the doll name, cup, height, product type, and brand. The whole batch must be valid before any title is changed.
+
+`Bulk Edit Tag Options` opens a blank set of tag controls. Only fields edited in that modal are applied to every product in the open workspace. Changes to a field also replace its previous custom value. Brand remains tied to each title. Saved workspaces retain the same storage keys and format; these actions do not edit other saved workspaces.
+
+The web form exports every product with `Status` set to `draft`, including products loaded from older workspaces that stored `active` status.
 
 When you paste `Body (HTML)`, the form tries to prefill blank height, cup size, waist, and hip tag controls from matching body measurements. If no labelled cup size is present, it calculates cup size from the full/upper bust minus lower/under bust using US one-inch cup steps. Use `Prefill from Body` to run that scraper again after editing the body text. Manual tag values are left alone.
 
@@ -84,9 +92,9 @@ The generator looks for exact allowed tags and parseable body lines.
 - `Option2 Value`: height from title or tags, such as `158cm`.
 - `Option3 Value`: hair colour from a hair-colour tag, such as `Blue`.
 - Eye colour is separate. `Blue Eyes` fills the eye colour metafield, not hair colour.
-- `Variant SKU`: built from title brand plus Body HTML details in this format: `Brand - Body/Height + MaterialCode #Original Name`.
+- `Variant SKU`: built from title brand plus Body HTML details. Its Body/Height segment uses a body code found in the original filename on the first body line; otherwise it uses a height in cm. A fallback height is never combined with the title's cup letter.
 - SKU material codes: blank for `TPE`, `S` for `Silicone`, `H` for hybrid material such as `TPE & Silicone`, and `T` for torso products.
-- Weight fields: filled only when `Body (HTML)` contains a `Weight:` line.
+- Weight fields: a line containing the word `Net` and a kg value takes priority over other body weight lines. A manually entered weight takes precedence.
 - Metafields: filled from matching tags like `Pear`, `Perky`, `Tan`, `Neutral`, `Long Hair`, `Eyes Closed`, `Waist 52cm`, and `Hip 85cm`.
 
 If a value cannot be found in `Title`, `Body (HTML)`, or `Tags`, the generated Shopify field stays blank unless you provide that exact Shopify column in the intake CSV.
@@ -98,4 +106,7 @@ $env:PYTHONPATH='src'
 python -m unittest discover -s tests
 node tests\web_generator.test.js
 node tests\tag_builder.test.js
+node tests\draft_store.test.js
 ```
+
+`tests/workspace_browser.test.js` is a Playwright browser-tool flow. Run it with the browser tool's `filename` argument while the web app is served at `http://127.0.0.1:8766/`. It creates an isolated browser context with fixture workspaces, checks CSV downloads and workspace preservation, and captures desktop/mobile screenshots without touching existing browser storage.

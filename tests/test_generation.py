@@ -82,7 +82,7 @@ class ShopifyCsvGenerationTests(unittest.TestCase):
             "Included / U.S.",
         ):
             self.assertEqual("TRUE", row[market])
-        self.assertEqual("active", row["Status"])
+        self.assertEqual("draft", row["Status"])
 
     def test_allows_status_and_included_market_overrides(self):
         row = generate_shopify_row(
@@ -201,7 +201,7 @@ class ShopifyCsvGenerationTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual("JigglyJoy 163E + #JigglyJoy Aura AI doll", row["Variant SKU"])
+        self.assertEqual("JigglyJoy 163cm + #JigglyJoy Aura AI doll", row["Variant SKU"])
         self.assertEqual("38000", row["Variant Grams"])
         self.assertEqual("38kg", row["Weight (product.metafields.custom.weight)"])
         self.assertEqual("38", row["Weight 2 (product.metafields.custom.weight_2)"])
@@ -246,6 +246,20 @@ class ShopifyCsvGenerationTests(unittest.TestCase):
         self.assertEqual("32000", row["Variant Grams"])
         self.assertEqual("32kg", row["Weight (product.metafields.custom.weight)"])
         self.assertEqual("32", row["Weight 2 (product.metafields.custom.weight_2)"])
+
+    def test_uses_filename_body_code_or_height_without_appending_title_cup(self):
+        base = {
+            "Title": "Kelly K (I-Cup) (165cm) | Brunette Bikini Woman Sex Doll | Yue Doll",
+            "Tags": "165cm, I-Cup, Sex Doll, Yue Doll",
+        }
+        for filename, prefix, original in (
+            ("165cm Integrated Head and Body - Kelly", "165cm", "165cm Integrated Head and Body - Kelly"),
+            ("Integrated Head and Body - Kelly", "165cm", "Integrated Head and Body - Kelly"),
+            ("YL-13+head (ROS) #Kelly", "YL-13+head", "YL-13+head ROS #Kelly"),
+        ):
+            with self.subTest(filename=filename):
+                row = generate_shopify_row({**base, "Body (HTML)": filename + "\nMaterial: Silicone"})
+                self.assertEqual(f"Yue Doll {prefix} + S #{original}", row["Variant SKU"])
 
     def test_weight_input_overrides_body_weight(self):
         row = generate_shopify_row(

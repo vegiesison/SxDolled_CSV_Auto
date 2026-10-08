@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>SxDolled CSV Builder</title>
     <link rel="icon" href="data:,">
-    <link rel="stylesheet" href="styles.css?v=20261006-refresh-sku-details">
+    <link rel="stylesheet" href="styles.css?v=20261008-sxdolled-palette">
   </head>
   <body>
     <div class="app-layout">
@@ -13,10 +13,6 @@
         <div class="product-nav-section">
           <h2 class="product-nav-heading">Products</h2>
           <div id="product-nav-buttons" class="product-nav-buttons"></div>
-        </div>
-        <div class="product-nav-section saved-drafts-panel">
-          <h2 class="product-nav-heading">Saved Drafts</h2>
-          <div id="saved-drafts" class="saved-drafts" aria-live="polite"></div>
         </div>
       </nav>
 
@@ -42,11 +38,76 @@
             </div>
           </header>
 
+          <div class="workspace-tools" aria-label="Workspace bulk actions">
+            <button type="button" id="remove-sxd-aliases">Remove SxD Names</button>
+            <button type="button" id="edit-descriptions">Edit Doll Descriptions</button>
+            <button type="button" id="bulk-edit-tags">Bulk Edit Tag Options</button>
+          </div>
           <div id="status" class="status" role="status" aria-live="polite">1 product set ready.</div>
         </div>
         <section id="products" class="product-list" aria-label="Product input sets"></section>
       </main>
+      <aside class="saved-drafts-panel" aria-label="Saved workspaces">
+        <h2 id="saved-drafts-heading" class="product-nav-heading">Saved Drafts</h2>
+        <div id="saved-drafts" class="saved-drafts" role="region" aria-labelledby="saved-drafts-heading" tabindex="0"></div>
+      </aside>
     </div>
+
+    <dialog id="rename-draft-dialog" class="bulk-dialog rename-draft-dialog" aria-labelledby="rename-draft-heading">
+      <form id="rename-draft-form">
+        <div class="modal-heading">
+          <h2 id="rename-draft-heading">Rename Workspace</h2>
+        </div>
+        <div class="modal-content">
+          <label for="draft-name">Workspace Name</label>
+          <input id="draft-name" type="text" maxlength="120" spellcheck="false" autofocus>
+          <p id="rename-draft-error" class="modal-error" role="alert"></p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" data-close-dialog>Cancel</button>
+          <button type="submit" class="primary-action">Save Name</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="description-dialog" class="bulk-dialog" aria-labelledby="description-heading">
+      <form id="description-form">
+        <div class="modal-heading">
+          <h2 id="description-heading">Edit Doll Descriptions</h2>
+          <span id="description-count" class="modal-count"></span>
+        </div>
+        <div class="modal-content">
+          <label for="description-lines">Descriptions (product order)</label>
+          <textarea id="description-lines" spellcheck="false" placeholder="Brunette Bikini Woman&#10;Blonde Lingerie Woman" autofocus></textarea>
+          <table class="description-preview">
+            <thead><tr><th>Product</th><th>New Description</th></tr></thead>
+            <tbody id="description-preview"></tbody>
+          </table>
+          <p id="description-error" class="modal-error" role="alert"></p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" data-close-dialog>Cancel</button>
+          <button type="submit" class="primary-action">Update Titles</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="bulk-tags-dialog" class="bulk-dialog bulk-tags-dialog" aria-labelledby="bulk-tags-heading">
+      <form id="bulk-tags-form">
+        <div class="modal-heading">
+          <h2 id="bulk-tags-heading">Bulk Edit Tag Options</h2>
+          <span id="bulk-tags-count" class="modal-count"></span>
+        </div>
+        <div class="modal-content">
+          <div class="tag-controls" data-tag-controls></div>
+          <p id="bulk-tags-error" class="modal-error" role="alert"></p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" data-close-dialog>Cancel</button>
+          <button type="submit" class="primary-action">Apply to Workspace</button>
+        </div>
+      </form>
+    </dialog>
 
     <template id="product-template">
       <section class="product">
@@ -81,13 +142,6 @@
             Weight (kg)
             <input type="number" data-field="weightKg" min="0" step="0.1" inputmode="decimal" placeholder="32">
           </label>
-          <label>
-            Status
-            <select data-field="status">
-              <option value="active" selected>active</option>
-              <option value="draft">draft</option>
-            </select>
-          </label>
           <fieldset class="market-controls">
             <legend>Included Markets</legend>
             <label><input type="checkbox" data-included-market="Included / Australia" checked> Australia</label>
@@ -115,9 +169,10 @@
       </section>
     </template>
 
-    <script src="csv-generator.js?v=20261006-compact-yeloly-sku"></script>
-    <script src="tag-builder.js?v=20261006-explicit-blank-tags"></script>
-    <script src="draft-store.js?v=20260924-workspaces"></script>
-    <script src="app.js?v=20261006-refresh-tags"></script>
+    <script src="csv-generator.js?v=20261008-body-height-draft"></script>
+    <script src="tag-builder.js?v=20261008-title-brand"></script>
+    <script src="draft-store.js?v=20261008-draft-reorder"></script>
+    <script src="vendor/Sortable.min.js?v=1.15.7"></script>
+    <script src="app.js?v=20261008-draft-reorder"></script>
   </body>
 </html>

@@ -9,7 +9,7 @@ GLOBAL_DEFAULTS = {
     "taxable": "TRUE",
     "gift_card": "FALSE",
     "weight_unit": "kg",
-    "status": "active",
+    "status": "draft",
     "included_markets": {
         "Included / Australia": "TRUE",
         "Included / Canada": "TRUE",

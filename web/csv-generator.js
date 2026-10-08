@@ -126,7 +126,7 @@
     taxable: "TRUE",
     giftCard: "FALSE",
     weightUnit: "kg",
-    status: "active",
+    status: "draft",
     includedMarkets: {
       "Included / Australia": "TRUE",
       "Included / Canada": "TRUE",
@@ -241,9 +241,6 @@
       const brandBase = skuBrandBase(product.title, sku);
       if (brandBase) return `${brandBase} - ${modelCode} + ${details}`;
     }
-
-    const existingPrefix = sku.match(/^(.+?\s+\+\s*)/)?.[1] || "";
-    if (existingPrefix) return `${existingPrefix}${details}`;
 
     const title = clean(product.title);
     const bodyHtml = clean(product.bodyHtml);
@@ -371,7 +368,7 @@
     const existingPrefix = clean(currentSku).match(/^(.+?)\s+\+/)?.[1] || "";
     const existingBrand = existingPrefix
       .replace(/\s+-\s+.+$/, "")
-      .replace(/\s+\d+(?:\.\d+)?[A-Z]\b.*$/i, "")
+      .replace(/\s+\d+(?:\.\d+)?(?:cm|[A-Z])\b.*$/i, "")
       .trim();
     if (existingBrand) return existingBrand;
     const brand = titleBrand(title);
@@ -448,20 +445,22 @@
   }
 
   function skuBodyHeightFromBody(bodyHtml) {
+    const firstLine = bodyFirstLine(bodyHtml);
+    const modelCode = skuModelCodeFromBodyFirstLine(firstLine);
+    if (modelCode) return modelCode;
+    const filenameHeight = firstLine.match(/\b(\d+(?:\.\d+)?)\s*cm\b/i);
+    if (filenameHeight) return `${numberText(filenameHeight[1])}cm`;
     const height = bodyLineValue(bodyHtml, "Height with Head") || bodyLineValue(bodyHtml, "Height");
-    const cup = bodyLineValue(bodyHtml, "Cup Size");
-    return skuBodyHeightFromValues(height, cup);
+    return skuBodyHeightFromValues(height);
   }
 
   function skuBodyHeightFromTitle(title) {
-    return skuBodyHeightFromValues(titleHeight(title), titleCup(title));
+    return skuBodyHeightFromValues(titleHeight(title));
   }
 
-  function skuBodyHeightFromValues(height, cup) {
+  function skuBodyHeightFromValues(height) {
     const heightMatch = clean(height).match(/\d+(?:\.\d+)?/);
-    const cupMatch = clean(cup).match(/\b([A-Z])\s*-?\s*Cup\b/i);
-    if (!heightMatch || !cupMatch) return "";
-    return `${numberText(heightMatch[0])}${cupMatch[1].toUpperCase()}`;
+    return heightMatch ? `${numberText(heightMatch[0])}cm` : "";
   }
 
   function capitalize(value) {

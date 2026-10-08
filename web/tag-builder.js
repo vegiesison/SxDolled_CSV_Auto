@@ -17,6 +17,7 @@
     {
       key: "brand",
       label: "Brand",
+      type: "derived",
       options: [
         "6YE Doll",
         "AF Doll",
@@ -210,14 +211,37 @@
     const values = {};
     const cup = title.match(/\(([A-Z])\s*-\s*Cup\)/i);
     const height = title.match(/\((\d+(?:\.\d+)?)\s*cm\)/i);
-    const brandSegment = clean(title).split("|").map((part) => part.trim()).filter(Boolean).at(-1) || "";
-    const brandMatch = extractBrandFromTitle(brandSegment || title);
+    const titleParts = clean(title).split("|");
 
     if (cup) values.cupSize = `${cup[1].toUpperCase()}-Cup`;
     if (height) values.height = numberText(height[1]);
-    values.brand = brandMatch.brand || "";
+    values.brand = titleParts.length >= 2 ? clean(titleParts.at(-1)) : extractBrandFromTitle(title).brand;
 
     return values;
+  }
+
+  function removeSxdAliases(value) {
+    return String(value ?? "").replace(/[ \t]*\(SxD\b[^)\r\n]*\)/gi, "");
+  }
+
+  function descriptionLines(value) {
+    const lines = String(value ?? "").split(/\r?\n/).map((line) => line.trim());
+    while (lines.length && !lines.at(-1)) lines.pop();
+    return lines;
+  }
+
+  function replaceTitleDescriptions(titles, input) {
+    const descriptions = descriptionLines(input);
+    if (descriptions.length !== titles.length) throw new Error(`Enter ${titles.length} descriptions, one for each product.`);
+    return titles.map((title, index) => {
+      const description = descriptions[index];
+      const parts = clean(title).split("|").map((part) => part.trim());
+      const productType = parts[1]?.match(/\b(Sex Doll Torso|Sex Doll Head|Sex Doll|Sex Torso|Mini Dolls?|Doll Head|Torsos?)\s*$/i)?.[1];
+      if (!description || description.includes("|") || parts.length !== 3 || !parts[0] || !parts[2] || !productType) {
+        throw new Error(`Product ${index + 1}: check the description and the title's product type and brand.`);
+      }
+      return `${parts[0]} | ${description} ${productType} | ${parts[2]}`;
+    });
   }
 
   function fieldValue(field, values) {
@@ -388,5 +412,8 @@
     extractMeasurementsFromBody,
     extractTagValuesFromTitle,
     refreshTitleMeasurementsFromBody,
+    removeSxdAliases,
+    descriptionLines,
+    replaceTitleDescriptions,
   };
 });

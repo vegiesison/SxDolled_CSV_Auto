@@ -6,6 +6,8 @@ const {
   extractMeasurementsFromBody,
   extractTagValuesFromTitle,
   refreshTitleMeasurementsFromBody,
+  removeSxdAliases,
+  replaceTitleDescriptions,
 } = require("../web/tag-builder.js");
 
 function test(name, fn) {
@@ -323,14 +325,37 @@ test("extracts cup size, height, and brand from fixed title format", () => {
   });
 });
 
-test("uses final title segment for fuzzy brand matching", () => {
+test("uses the final title segment verbatim as brand", () => {
   const values = extractTagValuesFromTitle("Ella B (H-Cup) (164cm) | Fit Brunette Asian Sex Doll | MD Dol");
 
-  assert.equal(values.brand, "MD Doll");
+  assert.equal(values.brand, "MD Dol");
 });
 
-test("leaves title brand blank when final segment is below 90 percent", () => {
+test("accepts brands outside the old dropdown list", () => {
   const values = extractTagValuesFromTitle("Ella B (H-Cup) (164cm) | Fit Brunette Asian Sex Doll | M Doll");
 
-  assert.equal(values.brand, "");
+  assert.equal(values.brand, "M Doll");
+  assert.equal(extractTagValuesFromTitle("Kelly K (I-Cup) (165cm) | Brunette Bikini Woman Sex Doll | Yue Doll").brand, "Yue Doll");
+  assert.equal(extractTagValuesFromTitle("Kelly K (I-Cup) (165cm) | Brunette Bikini Woman Sex Doll |").brand, "");
+});
+
+test("removes only parenthesized SxD aliases without changing other names or line breaks", () => {
+  assert.equal(removeSxdAliases("Model (SxD Josie B) (ROS)\nMaterial: Silicone\n(SxD Kelly K)\nWeight: 34kg"), "Model (ROS)\nMaterial: Silicone\n\nWeight: 34kg");
+  assert.equal(removeSxdAliases("(sxd Josie B) Model (SxD Josie B)"), " Model");
+  assert.equal(removeSxdAliases("Model (SxDoll Collection)"), "Model (SxDoll Collection)");
+});
+
+test("replaces ordered descriptions while preserving identity, product type, and brand", () => {
+  const titles = [
+    "Lyora (B-Cup) (155cm) | Pink-Haired Catgirl Sex Doll | Moonvale Doll",
+    "Kelly K (I-Cup) (165cm) | Red Nurse Sex Doll Torso | Yue Doll",
+  ];
+  assert.deepEqual(replaceTitleDescriptions(titles, "Brunette Bikini Woman\r\nBlonde Lingerie Woman\r\n"), [
+    "Lyora (B-Cup) (155cm) | Brunette Bikini Woman Sex Doll | Moonvale Doll",
+    "Kelly K (I-Cup) (165cm) | Blonde Lingerie Woman Sex Doll Torso | Yue Doll",
+  ]);
+  assert.throws(() => replaceTitleDescriptions(titles, "One Description"), /2 descriptions/);
+  assert.throws(() => replaceTitleDescriptions(titles, "One Description\n\nThree Description"), /2 descriptions/);
+  assert.throws(() => replaceTitleDescriptions(titles, "One Description\nBad | Brand"), /Product 2/);
+  assert.equal(titles[0], "Lyora (B-Cup) (155cm) | Pink-Haired Catgirl Sex Doll | Moonvale Doll");
 });

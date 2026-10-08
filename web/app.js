@@ -8,6 +8,12 @@ const statusText = document.querySelector("#status");
 const template = document.querySelector("#product-template");
 const productNavButtons = document.querySelector("#product-nav-buttons");
 const savedDraftsRoot = document.querySelector("#saved-drafts");
+const descriptionDialog = document.querySelector("#description-dialog");
+const descriptionInput = document.querySelector("#description-lines");
+const bulkTagsDialog = document.querySelector("#bulk-tags-dialog");
+const renameDraftDialog = document.querySelector("#rename-draft-dialog");
+const draftNameInput = document.querySelector("#draft-name");
+const bulkDirtyKeys = new Set();
 const DRAFTS_STORAGE_KEY = "sxdolledCsvDrafts";
 const AUTO_DRAFT_STORAGE_KEY = "sxdolledCsvAutoDraft";
 
@@ -16,8 +22,10 @@ let autoSaveTimer = 0;
 let suppressAutoSave = false;
 let activeDraftId = null;
 let pendingDeleteDraftId = null;
+let pendingRenameDraftId = null;
 let activeProductSection = null;
 let scrollSpyFrame = 0;
+let draftDragActive = false;
 
 function addProduct(seed = {}) {
   const id = nextProductId;
@@ -39,7 +47,6 @@ function addProduct(seed = {}) {
   const weightInput = section.querySelector("[data-field='weightKg']");
   weightInput.value = seed.weightKg || "";
   weightInput.dataset.autofilled = seed.weightKg ? "false" : "true";
-  section.querySelector("[data-field='status']").value = seed.status || "active";
   const includedMarkets = seed.includedMarkets || {};
   section.querySelectorAll("[data-included-market]").forEach((input) => {
     const value = includedMarkets[input.dataset.includedMarket];
@@ -79,7 +86,6 @@ function addProduct(seed = {}) {
     weightInput.dataset.autofilled = "false";
     scheduleAutoSave();
   });
-  section.querySelector("[data-field='status']").addEventListener("change", scheduleAutoSave);
   section.querySelectorAll("[data-included-market]").forEach((input) => input.addEventListener("change", scheduleAutoSave));
   section.querySelector(".prefill-tags").addEventListener("click", () => {
     applyBodyPrefill(section, { announce: true });
@@ -211,7 +217,7 @@ function readProducts() {
       variantSku: section.querySelector("[data-field='variantSku']").value,
       variantPrice: section.querySelector("[data-field='variantPrice']").value,
       weightKg: section.querySelector("[data-field='weightKg']").value,
-      status: section.querySelector("[data-field='status']").value,
+      status: "draft",
       includedMarkets: readIncludedMarkets(section),
       tagValues: readTagValues(section),
     };
@@ -305,7 +311,6 @@ function hasMeaningfulProduct(product) {
     clean(product.variantPrice) ||
     clean(product.weightKg) ||
     clean(product.tags) !== defaultTags ||
-    product.status !== "active" ||
     Object.values(product.includedMarkets || {}).some((value) => value !== "TRUE")
   );
 }
@@ -324,6 +329,8 @@ function writeDrafts(drafts) {
 }
 
 function renderSavedDrafts() {
+  if (draftDragActive) return;
+  const previousScrollTop = savedDraftsRoot.scrollTop;
   const drafts = readDrafts();
   const autoDraft = readAutoDraft();
   const autoDraftIsSavedWorkspace = autoDraft?.activeDraftId && drafts.some((draft) => draft.id === autoDraft.activeDraftId);
@@ -350,6 +357,7 @@ function renderSavedDrafts() {
       className: draft.id === activeDraftId ? "saved-draft saved-draft-active" : "saved-draft",
       metaPrefix: draft.id === activeDraftId ? "Current workspace" : "",
       onLoad: () => loadDraft(draft.id),
+      onRename: () => openRenameDraftDialog(draft.id),
       deleteText: "Delete",
       onDelete: () => requestDeleteDraft(draft.id),
       deletePending: pendingDeleteDraftId === draft.id,
@@ -357,11 +365,13 @@ function renderSavedDrafts() {
       onCancelDelete: cancelDeleteDraft,
     }));
   });
+  savedDraftsRoot.scrollTop = previousScrollTop;
 }
 
 function createSavedDraftElement(draft, options = {}) {
   const item = document.createElement("div");
   item.className = options.className || "saved-draft";
+  item.dataset.draftId = draft.id;
 
   const title = draft.title || "Untitled draft";
   const loadButton = document.createElement("button");
@@ -370,13 +380,33 @@ function createSavedDraftElement(draft, options = {}) {
   loadButton.textContent = title;
   loadButton.addEventListener("click", options.onLoad);
 
+  const heading = document.createElement("div");
+  heading.className = "saved-draft-heading";
+  heading.appendChild(loadButton);
+  if (options.onRename) {
+    const grip = document.createElement("button");
+    grip.type = "button";
+    grip.className = "saved-draft-grip";
+    grip.title = "Reorder workspace";
+    grip.setAttribute("aria-label", `Reorder ${title}`);
+    grip.setAttribute("aria-description", "Use the up and down arrow keys to move this workspace.");
+    const icon = document.createElement("img");
+    icon.src = "vendor/grip-vertical.svg";
+    icon.alt = "";
+    icon.width = 16;
+    icon.height = 16;
+    grip.appendChild(icon);
+    grip.addEventListener("keydown", (event) => moveDraftWithKeyboard(event, draft.id));
+    heading.appendChild(grip);
+  }
+
   const meta = document.createElement("span");
   meta.className = "saved-draft-meta";
   const productCount = `${draft.products.length} product${draft.products.length === 1 ? "" : "s"}`;
   const dateLabel = options.metaPrefix ? `${options.metaPrefix} · ${formatSavedDate(draft.savedAt)}` : formatSavedDate(draft.savedAt);
   meta.textContent = `${productCount} · ${dateLabel}`;
 
-  item.append(loadButton, meta);
+  item.append(heading, meta);
   if (options.deletePending) {
     const prompt = document.createElement("span");
     prompt.className = "saved-draft-confirmation";
@@ -407,15 +437,109 @@ function createSavedDraftElement(draft, options = {}) {
     deleteButton.textContent = options.deleteText || "Delete";
     deleteButton.setAttribute("aria-label", `${options.deleteText || "Delete"} ${title}`);
     deleteButton.addEventListener("click", options.onDelete);
-    item.append(deleteButton);
+    if (options.onRename) {
+      const actions = document.createElement("div");
+      actions.className = "saved-draft-actions";
+      const renameButton = document.createElement("button");
+      renameButton.type = "button";
+      renameButton.className = "saved-draft-rename";
+      renameButton.textContent = "Rename";
+      renameButton.setAttribute("aria-label", `Rename ${title}`);
+      renameButton.addEventListener("click", options.onRename);
+      actions.append(renameButton, deleteButton);
+      item.append(actions);
+    } else {
+      item.append(deleteButton);
+    }
   }
   return item;
+}
+
+function saveDraftOrder(orderedIds, focusId) {
+  try {
+    const drafts = readDrafts();
+    const ordered = window.SxDolledDraftStore.reorderDrafts(drafts, orderedIds);
+    const changed = ordered.some((draft, index) => draft.id !== drafts[index].id);
+    if (changed) writeDrafts(ordered);
+    renderSavedDrafts();
+    savedDraftsRoot.querySelector(`[data-draft-id="${CSS.escape(String(focusId))}"] .saved-draft-grip`)?.focus({ preventScroll: true });
+    if (changed) {
+      const index = ordered.findIndex((draft) => String(draft.id) === String(focusId));
+      setStatus(`Moved "${ordered[index].title}" to position ${index + 1} of ${ordered.length}.`);
+    }
+  } catch (error) {
+    renderSavedDrafts();
+    setStatus(error.message, true);
+  }
+}
+
+function moveDraftWithKeyboard(event, id) {
+  if (!["ArrowUp", "ArrowDown"].includes(event.key)) return;
+  event.preventDefault();
+  const ids = readDrafts().map((draft) => String(draft.id));
+  const index = ids.indexOf(String(id));
+  const target = index + (event.key === "ArrowUp" ? -1 : 1);
+  if (index < 0 || target < 0 || target >= ids.length) return;
+  [ids[index], ids[target]] = [ids[target], ids[index]];
+  saveDraftOrder(ids, id);
+}
+
+function initializeDraftSorting() {
+  new window.Sortable(savedDraftsRoot, {
+    draggable: ".saved-draft:not(.saved-draft-recovery)",
+    filter: "button:not(.saved-draft-grip), input, textarea",
+    preventOnFilter: false,
+    animation: 150,
+    delay: 150,
+    delayOnTouchOnly: true,
+    touchStartThreshold: 4,
+    scroll: savedDraftsRoot,
+    scrollSensitivity: 36,
+    bubbleScroll: false,
+    ghostClass: "saved-draft-drop-target",
+    chosenClass: "saved-draft-chosen",
+    onStart: () => { draftDragActive = true; },
+    onEnd: (event) => {
+      draftDragActive = false;
+      const ids = Array.from(savedDraftsRoot.querySelectorAll(".saved-draft:not(.saved-draft-recovery)"))
+        .map((item) => item.dataset.draftId);
+      saveDraftOrder(ids, event.item.dataset.draftId);
+    },
+  });
 }
 
 function formatSavedDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Saved";
   return date.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function openRenameDraftDialog(id) {
+  const draft = readDrafts().find((candidate) => candidate.id === id);
+  if (!draft) {
+    setStatus("Saved draft was not found.", true);
+    return;
+  }
+  pendingRenameDraftId = id;
+  draftNameInput.value = draft.customTitle || draft.title || "";
+  document.querySelector("#rename-draft-error").textContent = "";
+  renameDraftDialog.showModal();
+  draftNameInput.select();
+}
+
+function applyDraftRename(event) {
+  event.preventDefault();
+  const id = pendingRenameDraftId;
+  try {
+    const drafts = window.SxDolledDraftStore.renameDraft(readDrafts(), id, draftNameInput.value);
+    writeDrafts(drafts);
+    renameDraftDialog.close();
+    renderSavedDrafts();
+    savedDraftsRoot.querySelector(`[data-draft-id="${CSS.escape(id)}"] .saved-draft-rename`)?.focus({ preventScroll: true });
+    setStatus(`Renamed workspace to "${drafts.find((draft) => draft.id === id).title}".`);
+  } catch (error) {
+    document.querySelector("#rename-draft-error").textContent = error.message;
+  }
 }
 
 function loadDraft(id) {
@@ -617,11 +741,24 @@ function setStatus(message, isError = false) {
   statusText.dataset.state = isError ? "error" : "ok";
 }
 
-function buildTagControls(section, seedValues) {
+function buildTagControls(section, seedValues, options = {}) {
   const controlsRoot = section.querySelector("[data-tag-controls]");
-  const defaults = { ...window.SxDolledTagBuilder.defaultTagValues(), ...seedValues };
+  const defaults = options.bulk ? {} : { ...window.SxDolledTagBuilder.defaultTagValues(), ...seedValues };
+  const onChange = (input, key) => {
+    input.dataset.autofilled = "false";
+    if (options.bulk) {
+      bulkDirtyKeys.add(key);
+      input.closest(".tag-control").classList.add("tag-control-changed");
+      updateBulkTagCount();
+    } else {
+      updateTags(section);
+      updateVariantSku(section);
+      scheduleAutoSave();
+    }
+  };
   controlsRoot.innerHTML = "";
   window.SxDolledTagBuilder.TAG_FIELDS.forEach((field) => {
+    if (options.bulk && field.type === "derived") return;
     const row = document.createElement("div");
     row.className = "tag-control";
 
@@ -632,11 +769,16 @@ function buildTagControls(section, seedValues) {
     const fieldGroup = document.createElement("div");
     fieldGroup.className = "tag-control-fields";
 
-    const primary = field.type === "number" || field.type === "multi" ? document.createElement("input") : document.createElement("select");
+    const primary = ["number", "multi", "derived"].includes(field.type) ? document.createElement("input") : document.createElement("select");
     primary.id = `product-${section.dataset.productId}-${field.key}`;
     primary.dataset.tagKey = field.key;
     primary.className = "tag-primary";
-    if (field.type === "number") {
+    if (field.type === "derived") {
+      primary.type = "text";
+      primary.readOnly = true;
+      primary.value = defaults[field.key] || "";
+      fieldGroup.classList.add("tag-control-fields-derived");
+    } else if (field.type === "number") {
       primary.type = "number";
       primary.min = "0";
       primary.step = "0.1";
@@ -656,12 +798,7 @@ function buildTagControls(section, seedValues) {
         checkbox.dataset.tagMultiKey = field.key;
         checkbox.value = option;
         checkbox.checked = selectedValues.includes(option);
-        checkbox.addEventListener("change", () => {
-          checkbox.dataset.autofilled = "false";
-          updateTags(section);
-          updateVariantSku(section);
-          scheduleAutoSave();
-        });
+        checkbox.addEventListener("change", () => onChange(checkbox, field.key));
         choiceLabel.append(checkbox, document.createTextNode(option));
         choices.appendChild(choiceLabel);
       });
@@ -679,27 +816,12 @@ function buildTagControls(section, seedValues) {
     custom.placeholder = "Custom";
     custom.value = defaults[`${field.key}Custom`] || "";
 
-    primary.addEventListener("input", () => {
-      primary.dataset.autofilled = "false";
-      updateTags(section);
-      updateVariantSku(section);
-      scheduleAutoSave();
-    });
-    primary.addEventListener("change", () => {
-      primary.dataset.autofilled = "false";
-      updateTags(section);
-      updateVariantSku(section);
-      scheduleAutoSave();
-    });
-    custom.addEventListener("input", () => {
-      custom.dataset.autofilled = "false";
-      updateTags(section);
-      updateVariantSku(section);
-      scheduleAutoSave();
-    });
+    primary.addEventListener("input", () => onChange(primary, field.key));
+    primary.addEventListener("change", () => onChange(primary, field.key));
+    custom.addEventListener("input", () => onChange(custom, field.key));
 
     fieldGroup.prepend(primary);
-    fieldGroup.append(custom);
+    if (field.type !== "derived") fieldGroup.append(custom);
     row.append(label, fieldGroup);
     controlsRoot.appendChild(row);
   });
@@ -713,7 +835,7 @@ function syncProductFromSources(section) {
 
 function applyTitlePrefill(section, options = {}) {
   const titleValues = window.SxDolledTagBuilder.extractTagValuesFromTitle(section.querySelector("[data-field='title']").value);
-  const fields = ["cupSize", "height", "brand"];
+  const fields = ["cupSize", "height"];
   const changed = fields.filter((key) => prefillTagValue(section, key, titleValues[key], "title")).length;
   updateTags(section);
   updateVariantSku(section);
@@ -834,6 +956,8 @@ function readIncludedMarkets(section) {
 }
 
 function updateTags(section) {
+  const brand = section.querySelector('[data-tag-key="brand"]');
+  if (brand) brand.value = window.SxDolledTagBuilder.extractTagValuesFromTitle(section.querySelector('[data-field="title"]').value).brand;
   const tags = window.SxDolledTagBuilder.buildTags(readTagValues(section));
   section.querySelector("[data-field='tags']").value = tags;
   return tags;
@@ -856,6 +980,112 @@ function clean(value) {
   return String(value ?? "").trim();
 }
 
+function removeAllSxdAliases() {
+  let changed = 0;
+  productSections().forEach((section) => {
+    let productChanged = false;
+    ["title", "bodyHtml", "variantSku"].forEach((key) => {
+      const input = section.querySelector(`[data-field="${key}"]`);
+      const updated = window.SxDolledTagBuilder.removeSxdAliases(input.value);
+      if (updated !== input.value) {
+        input.value = updated;
+        productChanged = true;
+      }
+    });
+    if (productChanged) {
+      changed += 1;
+      syncProductFromSources(section);
+    }
+  });
+  if (changed) scheduleAutoSave();
+  setStatus(changed ? `Removed SxD names from ${changed} product${changed === 1 ? "" : "s"}.` : "No SxD names found in this workspace.");
+}
+
+function updateDescriptionPreview() {
+  const descriptions = window.SxDolledTagBuilder.descriptionLines(descriptionInput.value);
+  const sections = productSections();
+  document.querySelector("#description-count").textContent = `${descriptions.length} / ${sections.length} descriptions`;
+  const preview = document.querySelector("#description-preview");
+  preview.replaceChildren();
+  sections.forEach((section, index) => {
+    const row = document.createElement("tr");
+    const productCell = document.createElement("td");
+    const descriptionCell = document.createElement("td");
+    const title = section.querySelector('[data-field="title"]').value.split("|")[0].trim();
+    productCell.textContent = `Product ${index + 1}: ${title}`;
+    descriptionCell.textContent = descriptions[index] || "";
+    row.append(productCell, descriptionCell);
+    preview.appendChild(row);
+  });
+  document.querySelector("#description-error").textContent = "";
+}
+
+function openDescriptionDialog() {
+  descriptionInput.value = "";
+  updateDescriptionPreview();
+  descriptionDialog.showModal();
+}
+
+function applyDescriptionUpdates(event) {
+  event.preventDefault();
+  const sections = productSections();
+  try {
+    const titles = window.SxDolledTagBuilder.replaceTitleDescriptions(
+      sections.map((section) => section.querySelector('[data-field="title"]').value),
+      descriptionInput.value
+    );
+    sections.forEach((section, index) => {
+      section.querySelector('[data-field="title"]').value = titles[index];
+      syncProductFromSources(section);
+    });
+    descriptionDialog.close();
+    scheduleAutoSave();
+    setStatus(`Updated descriptions for ${sections.length} products.`);
+  } catch (error) {
+    document.querySelector("#description-error").textContent = error.message;
+  }
+}
+
+function updateBulkTagCount() {
+  document.querySelector("#bulk-tags-count").textContent = `${bulkDirtyKeys.size} fields / ${productSections().length} products`;
+  document.querySelector("#bulk-tags-error").textContent = "";
+}
+
+function openBulkTagsDialog() {
+  bulkDirtyKeys.clear();
+  bulkTagsDialog.dataset.productId = "bulk";
+  buildTagControls(bulkTagsDialog, {}, { bulk: true });
+  updateBulkTagCount();
+  bulkTagsDialog.showModal();
+}
+
+function applyBulkTagUpdates(event) {
+  event.preventDefault();
+  if (!bulkDirtyKeys.size) {
+    document.querySelector("#bulk-tags-error").textContent = "No tag options changed.";
+    return;
+  }
+  const values = readTagValues(bulkTagsDialog);
+  productSections().forEach((section) => {
+    bulkDirtyKeys.forEach((key) => {
+      const primary = section.querySelector(`[data-tag-key="${key}"]`);
+      const custom = section.querySelector(`[data-tag-custom-key="${key}"]`);
+      primary.value = Array.isArray(values[key]) ? "" : values[key];
+      primary.dataset.autofilled = "false";
+      custom.value = values[`${key}Custom`] || "";
+      custom.dataset.autofilled = "false";
+      section.querySelectorAll(`[data-tag-multi-key="${key}"]`).forEach((checkbox) => {
+        checkbox.checked = Array.isArray(values[key]) && values[key].includes(checkbox.value);
+        checkbox.dataset.autofilled = "false";
+      });
+    });
+    refreshTagsFromOptions(section);
+  });
+  bulkTagsDialog.close();
+  scheduleAutoSave();
+  setStatus(`Updated ${bulkDirtyKeys.size} tag options for ${productSections().length} products in this workspace.`);
+}
+
 const restoredDraft = readAutoDraft();
 if (restoredDraft) {
   activeDraftId = restoredDraft.activeDraftId || null;
@@ -865,6 +1095,7 @@ if (restoredDraft) {
   addProduct();
   renderSavedDrafts();
 }
+initializeDraftSorting();
 addProductButton.addEventListener("click", () => {
   addProduct();
   productSections().at(-1).querySelector("[data-field='title']").focus();
@@ -875,6 +1106,18 @@ newWorkspaceButton.addEventListener("click", startNewWorkspace);
 saveDraftButton.addEventListener("click", saveDraft);
 refreshSkuDetailsButton.addEventListener("click", refreshAllProductDetails);
 generateButton.addEventListener("click", downloadCsv);
+document.querySelector("#remove-sxd-aliases").addEventListener("click", removeAllSxdAliases);
+document.querySelector("#edit-descriptions").addEventListener("click", openDescriptionDialog);
+document.querySelector("#bulk-edit-tags").addEventListener("click", openBulkTagsDialog);
+descriptionInput.addEventListener("input", updateDescriptionPreview);
+document.querySelector("#description-form").addEventListener("submit", applyDescriptionUpdates);
+document.querySelector("#bulk-tags-form").addEventListener("submit", applyBulkTagUpdates);
+document.querySelector("#rename-draft-form").addEventListener("submit", applyDraftRename);
+renameDraftDialog.addEventListener("close", () => { pendingRenameDraftId = null; });
+draftNameInput.addEventListener("input", () => { document.querySelector("#rename-draft-error").textContent = ""; });
+document.querySelectorAll("[data-close-dialog]").forEach((button) => {
+  button.addEventListener("click", () => button.closest("dialog").close());
+});
 window.addEventListener("scroll", scheduleActiveProductFromViewport, { passive: true });
 window.addEventListener("pageshow", () => {
   productSections().forEach(syncProductFromSources);

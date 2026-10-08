@@ -489,21 +489,24 @@ def _is_sku_original_name_candidate(value: str) -> bool:
 
 
 def _sku_body_height_from_body(body: str) -> str:
+    first_line = body.splitlines()[0].strip() if body else ""
+    model_code = re.match(r"([A-Z]+-?\d+(?:\+[A-Z0-9]+)?)", first_line, re.IGNORECASE)
+    if model_code:
+        return model_code.group(1)
+    filename_height = re.search(r"\b(\d+(?:\.\d+)?)\s*cm\b", first_line, re.IGNORECASE)
+    if filename_height:
+        return f"{_number_text(filename_height.group(1))}cm"
     height = _body_line_value(body, "Height with Head") or _body_line_value(body, "Height")
-    cup = _body_line_value(body, "Cup Size")
-    return _sku_body_height_from_values(height, cup)
+    return _sku_body_height_from_values(height)
 
 
 def _sku_body_height_from_title(title: str) -> str:
-    return _sku_body_height_from_values(_title_height(title), _title_cup(title))
+    return _sku_body_height_from_values(_title_height(title))
 
 
-def _sku_body_height_from_values(height: str, cup: str) -> str:
+def _sku_body_height_from_values(height: str) -> str:
     height_match = re.search(r"\d+(?:\.\d+)?", height)
-    cup_match = re.search(r"\b(?P<cup>[A-Z])\s*-?\s*Cup\b", cup, re.IGNORECASE)
-    if not height_match or not cup_match:
-        return ""
-    return f"{_number_text(height_match.group(0))}{cup_match.group('cup').upper()}"
+    return f"{_number_text(height_match.group(0))}cm" if height_match else ""
 
 
 def _apply_exact_overrides(row: dict[str, str], intake: Mapping[str, str]) -> None:

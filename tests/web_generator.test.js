@@ -94,7 +94,7 @@ test("applies Shopify defaults and detected brand for non-Castle products", () =
     "Included / U.K.",
     "Included / U.S.",
   ].forEach((market) => assert.equal(row[market], "TRUE"));
-  assert.equal(row.Status, "active");
+  assert.equal(row.Status, "draft");
 });
 
 test("uses editable status and included market values", () => {
@@ -206,7 +206,7 @@ test("builds variant SKU from name-first body with measurement lines", () => {
     tags: "163cm, E-Cup, Sex Doll, JigglyJoy, Silicone",
   });
 
-  assert.equal(row["Variant SKU"], "JigglyJoy 163E + #JigglyJoy Aura AI doll");
+  assert.equal(row["Variant SKU"], "JigglyJoy 163cm + #JigglyJoy Aura AI doll");
   assert.equal(row["Variant Grams"], "38000");
   assert.equal(row["Weight (product.metafields.custom.weight)"], "38kg");
   assert.equal(row["Weight 2 (product.metafields.custom.weight_2)"], "38");
@@ -341,6 +341,18 @@ test("prioritizes a net line with kilograms for CSV weight columns", () => {
     assert.equal(row["Weight (product.metafields.custom.weight)"], "34kg", netLine);
     assert.equal(row["Weight 2 (product.metafields.custom.weight_2)"], "34", netLine);
   }
+});
+
+test("uses a filename height without inventing a body code from cup size", () => {
+  const product = {
+    title: "Kelly K (I-Cup) (165cm) | Brunette Bikini Woman Sex Doll | Yue Doll",
+    bodyHtml: "165cm Integrated Head and Body - Kelly\nMaterial: Silicone",
+    tags: "165cm, I-Cup, Sex Doll, Yue Doll",
+  };
+  assert.equal(generateShopifyRow(product)["Variant SKU"], "Yue Doll 165cm + S #165cm Integrated Head and Body - Kelly");
+  assert.equal(refreshVariantSkuBodyDetails("Yue Doll 165I + S #Old Kelly", product), "Yue Doll 165cm + S #165cm Integrated Head and Body - Kelly");
+  assert.equal(generateShopifyRow({ ...product, bodyHtml: "Integrated Head and Body - Kelly\nMaterial: Silicone" })["Variant SKU"], "Yue Doll 165cm + S #Integrated Head and Body - Kelly");
+  assert.equal(generateShopifyRow({ ...product, bodyHtml: "YL-13+head (ROS) #Kelly\nMaterial: Silicone" })["Variant SKU"], "Yue Doll YL-13+head + S #YL-13+head ROS #Kelly");
 });
 
 test("rounds decimal weight input for weight metafields", () => {
