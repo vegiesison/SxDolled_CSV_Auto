@@ -650,8 +650,14 @@ function downloadCsv() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   const stamp = new Date().toISOString().slice(0, 10);
+  const draft = readDrafts().find((candidate) => candidate.id === activeDraftId);
+  const draftName = String(draft?.customTitle || draft?.title || "")
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_")
+    .trim()
+    .replace(/\.csv$/i, "")
+    .replace(/[. ]+$/, "");
   link.href = url;
-  link.download = `sxdolled-products-${stamp}.csv`;
+  link.download = `${draftName || `sxdolled-products-${stamp}`}.csv`;
   document.body.appendChild(link);
   link.click();
   link.remove();
